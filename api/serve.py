@@ -196,7 +196,7 @@ def coverage():
 
     coverage = {}
     for src in source_keys:
-        flag = f"_in_{src}"
+        flag = f"in_{src}"
         count = sum(1 for g in _curated_sources.values() if g.get(flag, False))
         coverage[src] = {
             "count": count,
