@@ -89,6 +89,28 @@ LACUENE_PATH=../lacuene ./workers/overnight.sh
 LACUENE_PATH=../lacuene python3 api/serve.py --port 5000
 ```
 
+## Deployment
+
+Production runs on tulip (Proxmox), fully containerized:
+
+| Component | Container | Address | Notes |
+|-----------|-----------|---------|-------|
+| API server | LXC 638 (lacuene) | 172.20.1.238:5100 | systemd `lacuene-api.service` |
+| Reverse proxy | LXC 612 (caddy) | lacuene-api.apercue.ca | HTTP reverse proxy |
+| Static site | LXC 612 (caddy) | lacuene.apercue.ca | From lacuene `just site` output |
+| Overnight cron | LXC 638 | Sunday 2 AM + daily git pull | `/etc/cron.d/lacuene-overnight` |
+
+Nothing runs on the Proxmox host itself — all services are inside LXC containers.
+
+```bash
+# Manual deployment (inside LXC 638)
+systemctl restart lacuene-api    # Restart API
+journalctl -u lacuene-api -f     # Follow logs
+
+# From tulip host
+pct exec 638 -- systemctl status lacuene-api
+```
+
 ## Canon Purity
 
 Every derived dataset includes `_provenance` metadata:

@@ -32,3 +32,25 @@ INSIGHT_003: #Insight & {
 	implication: "Bulk pipeline identifies discovery candidates that merit individual literature review"
 	action_items: ["Build gap_candidates derivation worker", "Surface via /api/enrichment/gap-candidates"]
 }
+
+INSIGHT_004: #Insight & {
+	id:         "INSIGHT_004"
+	statement:  "154 gap candidates identified with disease signal — 246 genes have 5+ HPO phenotypes but are not curated"
+	evidence:   ["derived/gap_candidates.json", "/api/enrichment/gap-candidates", "genome_wide_summary.json shows with_phenotypes_and_no_curated: 246"]
+	method:     "gap_analysis"
+	confidence: "medium"
+	discovered: "2026-02-14"
+	implication: "The curated 95-gene set covers the known neural crest core but misses disease-associated genes in adjacent pathways"
+	action_items: ["Review top-scoring candidates with Jaimie", "Promote validated candidates to lacuene curated set"]
+}
+
+INSIGHT_005: #Insight & {
+	id:         "INSIGHT_005"
+	statement:  "LXC containerization is mandatory for Proxmox-hosted services — host should only run hypervisor, not application code"
+	evidence:   ["LXC 638 deployment on tulip (172.20.1.238)", "Previous attempt ran Flask directly on Proxmox host"]
+	method:     "cross_reference"
+	confidence: "high"
+	discovered: "2026-02-14"
+	implication: "All future services follow the LXC pattern: own IP, own systemd, own cron. Caddy in LXC 612 reverse-proxies."
+	action_items: ["Document LXC deployment pattern", "Never deploy application services on Proxmox host"]
+}

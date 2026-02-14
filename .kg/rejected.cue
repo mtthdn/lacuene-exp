@@ -15,3 +15,11 @@ REJ_002: #Rejected & {
 	date:        "2026-02-14"
 	alternative: "Exclude entire ZNF C2H2 family. Consider individual ZNF genes only if they appear in HPO craniofacial phenotypes."
 }
+
+REJ_003: #Rejected & {
+	id:          "REJ_003"
+	approach:    "Run Flask API directly on Proxmox host (tulip)"
+	reason:      "Proxmox host is infrastructure — running application services there violates isolation. A misbehaving Flask app could affect other VMs/containers."
+	date:        "2026-02-14"
+	alternative: "Deploy inside LXC container (638) with own IP, systemd service, and cron. Caddy (LXC 612) reverse-proxies to the container."
+}

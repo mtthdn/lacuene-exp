@@ -33,3 +33,20 @@ DERIV_002: #Derivation & {
 	gene_count:   1254
 	record_count: 1254
 }
+
+DERIV_003: #Derivation & {
+	id:          "DERIV_003"
+	worker:      "workers/derive_gap_candidates.py"
+	output_file: "derived/gap_candidates.json"
+	date:        "2026-02-14"
+	description: "Genes with disease signal (HPO/Orphanet/OMIM) not in curated 95-gene set — research candidates"
+
+	canon_purity:      "derived"
+	canon_sources:     ["HGNC", "HPO annotations", "Orphanet gene-disease", "OMIM morbidmap"]
+	non_canon_elements: ["Confidence scoring formula (HPO count + Orphanet + OMIM)", "ZNF exclusion rule", "Ranking heuristic"]
+	action_required:   "Candidates require individual literature review before promotion to curated set"
+
+	input_files: ["expanded/hgnc_craniofacial.json", "derived/genome_wide.csv"]
+	gene_count:   154
+	record_count: 154
+}
