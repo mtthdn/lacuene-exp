@@ -21,6 +21,7 @@ import json
 import math
 import os
 import sys
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -73,8 +74,37 @@ def main():
         hpo_genes = {sym: sorted(terms) for sym, terms in gene_phenos.items()}
         print(f"HPO: {len(hpo_genes)} genes with phenotypes")
 
-    # Load Orphanet
-    orphanet = load_json(LACUENE_PATH / "data" / "orphanet" / "orphanet_cache.json", "orphanet")
+    # Load Orphanet from bulk XML (covers all 4500+ genes, not just curated 80)
+    orphanet = {}
+    orphanet_xml = LACUENE_PATH / "data" / "orphanet" / "en_product6.xml"
+    if orphanet_xml.exists():
+        tree = ET.parse(str(orphanet_xml))
+        xml_root = tree.getroot()
+        for disorder in xml_root.iter("Disorder"):
+            orpha_code_el = disorder.find("OrphaCode")
+            name_el = disorder.find("Name")
+            if orpha_code_el is None or name_el is None:
+                continue
+            orpha_code = orpha_code_el.text or ""
+            disorder_name = name_el.text or ""
+            for assoc in disorder.iter("DisorderGeneAssociation"):
+                gene_el = assoc.find("Gene")
+                if gene_el is None:
+                    continue
+                symbol_el = gene_el.find("Symbol")
+                if symbol_el is None or not symbol_el.text:
+                    continue
+                symbol = symbol_el.text.strip()
+                if symbol not in orphanet:
+                    orphanet[symbol] = {"disorders": []}
+                existing = {d["orpha_code"] for d in orphanet[symbol]["disorders"]}
+                if orpha_code not in existing:
+                    orphanet[symbol]["disorders"].append(
+                        {"orpha_code": orpha_code, "name": disorder_name}
+                    )
+        print(f"Orphanet: {len(orphanet)} genes from product6 XML")
+    else:
+        print(f"  [Orphanet] XML not found: {orphanet_xml}", file=sys.stderr)
 
     # Load OMIM subset
     omim_data = load_json(LACUENE_PATH / "data" / "omim" / "omim_subset.json", "omim")
@@ -104,13 +134,14 @@ def main():
         omim_syndromes = len(omim_entry.get("syndromes", [])) if has_omim else 0
 
         # Confidence score: log-scaled by evidence density
-        # HPO: log2(count + 1) — continuous, no cap (360 phenos → 8.5, 25 → 4.7, 5 → 2.6)
-        # Orphanet: 3 points per disorder (rare disease = high signal)
-        # OMIM: 2 base + 1 per syndrome
+        # HPO: log2(count + 1) — 360 phenos → 8.5, 25 → 4.7, 5 → 2.6
+        # Orphanet: log2(count + 1) × 3 — premium for rare disease signal
+        #   18 disorders → 12.3, 5 → 7.8, 1 → 3.0
+        # OMIM: 2 base + log2(syndromes + 1)
         score = 0.0
         score += math.log2(hpo_count + 1) if hpo_count > 0 else 0
-        score += orph_count * 3  # Orphanet disorders
-        score += (2 + omim_syndromes) if has_omim else 0
+        score += math.log2(orph_count + 1) * 3 if orph_count > 0 else 0
+        score += (2 + math.log2(omim_syndromes + 1)) if has_omim else 0
         score = round(score, 1)
 
         if score == 0:
@@ -164,9 +195,9 @@ def main():
         "expanded_count": len(expanded),
         "candidate_count": len(candidates),
         "score_distribution": {
-            "high (7+)": sum(1 for c in candidates if c["confidence_score"] >= 7),
-            "medium (4-6.9)": sum(1 for c in candidates if 4 <= c["confidence_score"] < 7),
-            "low (<4)": sum(1 for c in candidates if c["confidence_score"] < 4),
+            "high (12+)": sum(1 for c in candidates if c["confidence_score"] >= 12),
+            "medium (7-11.9)": sum(1 for c in candidates if 7 <= c["confidence_score"] < 12),
+            "low (<7)": sum(1 for c in candidates if c["confidence_score"] < 7),
         },
         "candidates": candidates,
     }
@@ -176,9 +207,9 @@ def main():
         json.dump(output, f, indent=2)
 
     print(f"\nWrote {len(candidates)} candidates to {out_path}")
-    print(f"  High confidence (7+): {output['score_distribution']['high (7+)']}")
-    print(f"  Medium (4-6.9):       {output['score_distribution']['medium (4-6.9)']}")
-    print(f"  Low (<4):             {output['score_distribution']['low (<4)']}")
+    print(f"  High confidence (12+): {output['score_distribution']['high (12+)']}")
+    print(f"  Medium (7-11.9):       {output['score_distribution']['medium (7-11.9)']}")
+    print(f"  Low (<7):              {output['score_distribution']['low (<7)']}")
 
     # Show top 10
     if candidates:
