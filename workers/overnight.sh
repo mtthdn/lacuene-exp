@@ -8,7 +8,8 @@
 #   1. Refresh HGNC data (network)
 #   2. Cross-reference bulk sources (CPU)
 #   3. Derive gap candidates (CPU)
-#   4. Export for API (CPU)
+#   4. Enrich top candidates (network, rate-limited)
+#   5. Pipeline status snapshot (CPU)
 #
 # Usage:
 #   ./workers/overnight.sh                  # Full run
@@ -96,8 +97,17 @@ python3 "$SCRIPT_DIR/derive_gap_candidates.py" >> "$LOG" 2>&1 || {
 
 phase_end 3
 
-# ── Phase 4: Pipeline status ────────────────────────────────────────
-phase_start 4 "Status snapshot"
+# ── Phase 4: Enrich top candidates ─────────────────────────────────
+phase_start 4 "Candidate enrichment"
+
+python3 "$SCRIPT_DIR/enrich_candidates.py" --top 20 >> "$LOG" 2>&1 || {
+    log "WARNING: Candidate enrichment failed (API rate limits?)"
+}
+
+phase_end 4
+
+# ── Phase 5: Pipeline status ────────────────────────────────────────
+phase_start 5 "Status snapshot"
 
 # Write pipeline status JSON
 cat > "$DERIVED_DIR/pipeline_status.json" << STATUSEOF
@@ -107,17 +117,19 @@ cat > "$DERIVED_DIR/pipeline_status.json" << STATUSEOF
   "phases": {
     "hgnc_refresh": "$([ -f "$HGNC_CACHE" ] && echo 'ok' || echo 'failed')",
     "bulk_crossref": "$([ -f "$DERIVED_DIR/genome_wide.csv" ] && echo 'ok' || echo 'failed')",
-    "gap_candidates": "$([ -f "$DERIVED_DIR/gap_candidates.json" ] && echo 'ok' || echo 'failed')"
+    "gap_candidates": "$([ -f "$DERIVED_DIR/gap_candidates.json" ] && echo 'ok' || echo 'failed')",
+    "candidate_enrichment": "$([ -f "$DERIVED_DIR/candidate_enrichment.json" ] && echo 'ok' || echo 'failed')"
   },
   "files": {
     "hgnc_craniofacial": "$(wc -c < "$REPO_ROOT/expanded/hgnc_craniofacial.json" 2>/dev/null || echo 0)",
     "genome_wide_csv": "$(wc -c < "$DERIVED_DIR/genome_wide.csv" 2>/dev/null || echo 0)",
-    "gap_candidates": "$(wc -c < "$DERIVED_DIR/gap_candidates.json" 2>/dev/null || echo 0)"
+    "gap_candidates": "$(wc -c < "$DERIVED_DIR/gap_candidates.json" 2>/dev/null || echo 0)",
+    "candidate_enrichment": "$(wc -c < "$DERIVED_DIR/candidate_enrichment.json" 2>/dev/null || echo 0)"
   }
 }
 STATUSEOF
 
-phase_end 4
+phase_end 5
 
 log "Pipeline complete in ${SECONDS}s"
 log "Log: $LOG"
