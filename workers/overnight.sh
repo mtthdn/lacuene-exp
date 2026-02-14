@@ -59,7 +59,7 @@ HGNC_CACHE="$REPO_ROOT/expanded/hgnc_craniofacial.json"
 HGNC_AGE_DAYS=7
 
 if [ -f "$HGNC_CACHE" ]; then
-    AGE=$(( ($(date +%s) - $(stat -c %Y "$HGNC_CACHE")) / 86400 ))
+    AGE=$(python3 -c "import os,time; print(int((time.time()-os.path.getmtime('$HGNC_CACHE'))/86400))")
     if [ "$AGE" -lt "$HGNC_AGE_DAYS" ]; then
         log "HGNC cache is ${AGE}d old (threshold: ${HGNC_AGE_DAYS}d), skipping refresh"
     else

@@ -13,12 +13,12 @@ bulk download sources that cover the entire genome:
 Sources that require per-gene API calls (GO, PubMed, ClinVar, gnomAD, etc.)
 are not included. Use the curated CUE pipeline for those.
 
-Output: output/bulk/genome_wide.csv
-        output/bulk/genome_wide_summary.json
+Output: derived/genome_wide.csv
+        derived/genome_wide_summary.json
 
 Usage:
-    python3 normalizers/bulk_downloads.py
-    python3 normalizers/bulk_downloads.py --craniofacial   # Only craniofacial genes
+    python3 workers/bulk_downloads.py
+    python3 workers/bulk_downloads.py --craniofacial   # Only craniofacial genes
 """
 
 import csv

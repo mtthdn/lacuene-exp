@@ -283,7 +283,7 @@ def provenance():
                 with open(f) as fh:
                     data = json.load(fh)
                 if isinstance(data, dict) and "_provenance" in data:
-                    prov = data["_provenance"]
+                    prov = data["_provenance"].copy()
                     prov["output_file"] = f.name
                     prov["size_bytes"] = f.stat().st_size
                     derivations.append(prov)
@@ -324,7 +324,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--debug", action="store_true", help="Enable Flask debug mode (dev only)")
     args = parser.parse_args()
 
     load_data()
-    app.run(host=args.host, port=args.port, debug=True)
+    app.run(host=args.host, port=args.port, debug=args.debug)

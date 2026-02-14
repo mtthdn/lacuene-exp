@@ -12,12 +12,13 @@ The HGNC complete set includes: symbol, name, locus_group, locus_type,
 NCBI Gene ID, UniProt ID, Ensembl ID, OMIM ID, and more.
 
 Usage:
-    python3 normalizers/bulk_hgnc.py                    # Download full set
-    python3 normalizers/bulk_hgnc.py --craniofacial     # Filter to craniofacial-adjacent
-    python3 normalizers/bulk_hgnc.py --stats             # Print stats only
+    python3 workers/bulk_hgnc.py                    # Download full set
+    python3 workers/bulk_hgnc.py --craniofacial     # Filter to craniofacial-adjacent
+    python3 workers/bulk_hgnc.py --stats             # Print stats only
 """
 
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -25,6 +26,7 @@ import urllib.error
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+LACUENE_PATH = Path(os.environ.get("LACUENE_PATH", REPO_ROOT.parent / "lacuene"))
 
 # Output to lacuene-exp/expanded/ (not lacuene/data/)
 CACHE_DIR = REPO_ROOT / "expanded"
@@ -231,7 +233,7 @@ def main():
 
     if args.craniofacial:
         # Load current curated set
-        sys.path.insert(0, str(REPO_ROOT / "normalizers"))
+        sys.path.insert(0, str(LACUENE_PATH / "normalizers"))
         from genes import GENES
         curated_symbols = set(GENES.keys())
 
