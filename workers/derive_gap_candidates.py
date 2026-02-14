@@ -18,6 +18,7 @@ Usage:
 """
 
 import json
+import math
 import os
 import sys
 from datetime import datetime, timezone
@@ -102,14 +103,15 @@ def main():
         has_omim = bool(omim_entry)
         omim_syndromes = len(omim_entry.get("syndromes", [])) if has_omim else 0
 
-        # Confidence score: weighted by evidence type
-        # HPO phenotypes: 1 point per 5 phenotypes (capped at 5)
-        # Orphanet disorders: 3 points each (rare disease = high signal)
-        # OMIM entry: 2 points + 1 per syndrome
-        score = 0
-        score += min(5, hpo_count // 5)  # Up to 5 points from HPO
-        score += min(9, orph_count * 3)  # Up to 9 points from Orphanet
-        score += (2 + omim_syndromes) if has_omim else 0  # 2+ from OMIM
+        # Confidence score: log-scaled by evidence density
+        # HPO: log2(count + 1) — continuous, no cap (360 phenos → 8.5, 25 → 4.7, 5 → 2.6)
+        # Orphanet: 3 points per disorder (rare disease = high signal)
+        # OMIM: 2 base + 1 per syndrome
+        score = 0.0
+        score += math.log2(hpo_count + 1) if hpo_count > 0 else 0
+        score += orph_count * 3  # Orphanet disorders
+        score += (2 + omim_syndromes) if has_omim else 0
+        score = round(score, 1)
 
         if score == 0:
             continue  # No disease signal at all
@@ -162,9 +164,9 @@ def main():
         "expanded_count": len(expanded),
         "candidate_count": len(candidates),
         "score_distribution": {
-            "high (8+)": sum(1 for c in candidates if c["confidence_score"] >= 8),
-            "medium (4-7)": sum(1 for c in candidates if 4 <= c["confidence_score"] < 8),
-            "low (1-3)": sum(1 for c in candidates if c["confidence_score"] < 4),
+            "high (7+)": sum(1 for c in candidates if c["confidence_score"] >= 7),
+            "medium (4-6.9)": sum(1 for c in candidates if 4 <= c["confidence_score"] < 7),
+            "low (<4)": sum(1 for c in candidates if c["confidence_score"] < 4),
         },
         "candidates": candidates,
     }
@@ -174,9 +176,9 @@ def main():
         json.dump(output, f, indent=2)
 
     print(f"\nWrote {len(candidates)} candidates to {out_path}")
-    print(f"  High confidence (8+): {output['score_distribution']['high (8+)']}")
-    print(f"  Medium (4-7):         {output['score_distribution']['medium (4-7)']}")
-    print(f"  Low (1-3):            {output['score_distribution']['low (1-3)']}")
+    print(f"  High confidence (7+): {output['score_distribution']['high (7+)']}")
+    print(f"  Medium (4-6.9):       {output['score_distribution']['medium (4-6.9)']}")
+    print(f"  Low (<4):             {output['score_distribution']['low (<4)']}")
 
     # Show top 10
     if candidates:
@@ -185,7 +187,7 @@ def main():
             hpo = c["evidence"]["hpo_phenotype_count"]
             orph = c["evidence"]["orphanet_disorder_count"]
             omim = "OMIM" if c["evidence"]["has_omim"] else ""
-            print(f"  {c['symbol']:10s} score={c['confidence_score']:2d}  "
+            print(f"  {c['symbol']:10s} score={c['confidence_score']:5.1f}  "
                   f"HPO={hpo:3d}  Orphanet={orph}  {omim}  {c['name'][:50]}")
 
 
