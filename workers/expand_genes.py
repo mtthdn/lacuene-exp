@@ -11,8 +11,8 @@ Cross-reference IDs (NCBI, UniProt, OMIM) come from HGNC data.
 Developmental roles are auto-assigned from gene group membership.
 
 Usage:
-    python3 normalizers/expand_genes.py          # Preview
-    python3 normalizers/expand_genes.py --write   # Write genes.py
+    python3 workers/expand_genes.py          # Preview
+    python3 workers/expand_genes.py --write   # Write genes.py
 """
 
 import json
