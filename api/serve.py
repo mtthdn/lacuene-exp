@@ -36,6 +36,8 @@ _curated_sources = {}    # symbol -> {source_flags}
 _curated_gaps = {}       # gap report
 _expanded_genes = []     # HGNC expanded gene list
 _bulk_genes = []         # genome-wide craniofacial
+_gap_candidates = {}     # derived gap candidates
+DERIVED_DIR = REPO_ROOT / "derived"
 
 
 def _load_json(path: Path, label: str) -> dict | list:
@@ -51,7 +53,7 @@ def _load_json(path: Path, label: str) -> dict | list:
 
 def load_data():
     """Load all data tiers at startup."""
-    global _curated_sources, _curated_gaps, _expanded_genes, _bulk_genes
+    global _curated_sources, _curated_gaps, _expanded_genes, _bulk_genes, _gap_candidates
 
     print("Loading data tiers...")
 
@@ -69,11 +71,15 @@ def load_data():
         print(f"  [expanded] After ZNF filter: {len(_expanded_genes)} genes")
 
     # Tier 3: Genome-wide (bulk CSV summary, if available)
-    bulk_summary = _load_json(
-        LACUENE_PATH / "output" / "bulk" / "genome_wide_summary.json", "bulk"
-    )
+    bulk_path = DERIVED_DIR / "genome_wide_summary.json"
+    if not bulk_path.exists():
+        bulk_path = LACUENE_PATH / "output" / "bulk" / "genome_wide_summary.json"
+    bulk_summary = _load_json(bulk_path, "bulk")
     if bulk_summary:
         _bulk_genes = bulk_summary
+
+    # Derived: gap candidates (from derive_gap_candidates.py)
+    _gap_candidates = _load_json(DERIVED_DIR / "gap_candidates.json", "gap_candidates")
 
     tiers = []
     if _curated_sources:
@@ -82,6 +88,9 @@ def load_data():
         tiers.append(f"expanded({len(_expanded_genes)})")
     if _bulk_genes:
         tiers.append("bulk")
+    derived_count = sum(1 for x in [_gap_candidates] if x)
+    if derived_count:
+        tiers.append(f"derived({derived_count} datasets)")
     print(f"  Ready: {', '.join(tiers) or 'no data loaded'}")
 
 
@@ -210,18 +219,102 @@ def coverage():
     })
 
 
+# --- Enrichment routes (derived data, separated from source per finglonger pattern) ---
+
+@app.route("/api/enrichment/gap-candidates")
+def gap_candidates():
+    """Genes with disease signal not in curated set — research candidates."""
+    if not _gap_candidates:
+        return jsonify({"error": "Gap candidates not available", "hint": "Run: python3 workers/derive_gap_candidates.py"}), 503
+
+    # Optional filters
+    min_score = request.args.get("min_score", 0, type=int)
+    limit = request.args.get("limit", 50, type=int)
+
+    candidates = _gap_candidates.get("candidates", [])
+    if min_score > 0:
+        candidates = [c for c in candidates if c["confidence_score"] >= min_score]
+
+    return jsonify({
+        "tier": "derived",
+        "canon_purity": "derived",
+        "provenance": _gap_candidates.get("_provenance", {}),
+        "total_candidates": _gap_candidates.get("candidate_count", 0),
+        "filtered_count": len(candidates),
+        "score_distribution": _gap_candidates.get("score_distribution", {}),
+        "candidates": candidates[:limit],
+    })
+
+
+@app.route("/api/enrichment/coverage-matrix")
+def coverage_matrix():
+    """Full cross-source coverage matrix for all tiers."""
+    if not _curated_sources:
+        return jsonify({"error": "No data"}), 503
+
+    source_keys = [
+        "go", "omim", "hpo", "uniprot", "facebase", "clinvar",
+        "pubmed", "gnomad", "nih_reporter", "gtex", "clinicaltrials",
+        "string", "orphanet", "opentargets", "models", "structures",
+    ]
+
+    # Per-gene coverage matrix
+    matrix = {}
+    for sym, data in sorted(_curated_sources.items()):
+        matrix[sym] = {src: data.get(f"in_{src}", False) for src in source_keys}
+
+    return jsonify({
+        "tier": "curated",
+        "total_genes": len(matrix),
+        "sources": source_keys,
+        "matrix": matrix,
+    })
+
+
+@app.route("/api/enrichment/provenance")
+def provenance():
+    """Derivation audit trail — what was computed, when, from what sources."""
+    derivations = []
+
+    # Check each derived file for _provenance metadata
+    if DERIVED_DIR.exists():
+        for f in sorted(DERIVED_DIR.glob("*.json")):
+            try:
+                with open(f) as fh:
+                    data = json.load(fh)
+                if isinstance(data, dict) and "_provenance" in data:
+                    prov = data["_provenance"]
+                    prov["output_file"] = f.name
+                    prov["size_bytes"] = f.stat().st_size
+                    derivations.append(prov)
+            except (json.JSONDecodeError, OSError):
+                continue
+
+    return jsonify({
+        "derivation_count": len(derivations),
+        "derivations": derivations,
+    })
+
+
 @app.route("/")
 def index():
     """API documentation."""
     return jsonify({
         "service": "lacuene-exp",
-        "description": "Neural crest gene data API (curated + expanded tiers)",
+        "description": "Neural crest gene data API (curated + expanded + derived tiers)",
         "endpoints": {
-            "/api/status": "Health check with tier availability",
-            "/api/genes": "List genes (tier=curated|expanded|genome)",
-            "/api/genes/<symbol>": "Single gene detail",
-            "/api/gaps": "Research gap report",
-            "/api/coverage": "Source coverage matrix",
+            "source": {
+                "/api/status": "Health check with tier availability",
+                "/api/genes": "List genes (tier=curated|expanded|genome)",
+                "/api/genes/<symbol>": "Single gene detail",
+                "/api/gaps": "Research gap report (curated)",
+                "/api/coverage": "Source coverage summary",
+            },
+            "enrichment": {
+                "/api/enrichment/gap-candidates": "Genes with disease signal not in curated set (?min_score=N&limit=N)",
+                "/api/enrichment/coverage-matrix": "Full per-gene source coverage matrix",
+                "/api/enrichment/provenance": "Derivation audit trail",
+            },
         },
     })
 

@@ -16,11 +16,13 @@ Usage:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-HGNC_FILE = REPO_ROOT / "data" / "hgnc" / "hgnc_craniofacial.json"
+LACUENE_PATH = Path(os.environ.get("LACUENE_PATH", REPO_ROOT.parent / "lacuene"))
+HGNC_FILE = REPO_ROOT / "expanded" / "hgnc_craniofacial.json"
 
 # Map HGNC gene groups to developmental roles
 GROUP_TO_ROLE = {
@@ -121,7 +123,7 @@ def main():
     args = parser.parse_args()
 
     # Load current curated genes
-    sys.path.insert(0, str(REPO_ROOT / "normalizers"))
+    sys.path.insert(0, str(LACUENE_PATH / "normalizers"))
     from genes import GENES as curated_genes, ROLES as curated_roles
 
     # Load HGNC craniofacial genes

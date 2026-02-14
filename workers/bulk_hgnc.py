@@ -26,7 +26,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-CACHE_DIR = REPO_ROOT / "data" / "hgnc"
+# Output to lacuene-exp/expanded/ (not lacuene/data/)
+CACHE_DIR = REPO_ROOT / "expanded"
 FULL_CACHE = CACHE_DIR / "hgnc_complete.json"
 PROTEIN_CODING_CACHE = CACHE_DIR / "hgnc_protein_coding.json"
 

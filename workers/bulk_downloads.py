@@ -23,20 +23,27 @@ Usage:
 
 import csv
 import json
+import os
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT_DIR = REPO_ROOT / "output" / "bulk"
+LACUENE_PATH = Path(os.environ.get("LACUENE_PATH", REPO_ROOT.parent / "lacuene"))
+OUTPUT_DIR = REPO_ROOT / "derived"
 
 
 def load_hgnc_genes(craniofacial_only: bool = False) -> list[dict]:
     """Load protein-coding genes from HGNC cache."""
     if craniofacial_only:
-        path = REPO_ROOT / "data" / "hgnc" / "hgnc_craniofacial.json"
+        filename = "hgnc_craniofacial.json"
     else:
-        path = REPO_ROOT / "data" / "hgnc" / "hgnc_protein_coding.json"
+        filename = "hgnc_protein_coding.json"
+    # Check lacuene-exp/expanded first, then lacuene/data/hgnc
+    path = REPO_ROOT / "expanded" / filename
+    if not path.exists():
+        path = LACUENE_PATH / "data" / "hgnc" / filename
 
     if not path.exists():
         print(f"ERROR: {path} not found. Run: python3 normalizers/bulk_hgnc.py",
@@ -49,7 +56,7 @@ def load_hgnc_genes(craniofacial_only: bool = False) -> list[dict]:
 
 def load_hpo_associations() -> dict[str, list[str]]:
     """Load HPO phenotype-to-gene bulk file. Returns {symbol: [phenotype_terms]}."""
-    hpo_file = REPO_ROOT / "data" / "hpo" / "genes_to_phenotype.txt"
+    hpo_file = LACUENE_PATH / "data" / "hpo" / "genes_to_phenotype.txt"
     if not hpo_file.exists():
         print(f"  WARNING: {hpo_file} not found, skipping HPO", file=sys.stderr)
         return {}
@@ -71,7 +78,7 @@ def load_hpo_associations() -> dict[str, list[str]]:
 
 def load_orphanet_associations() -> dict[str, list[dict]]:
     """Load Orphanet rare disease associations from cache. Returns {symbol: [{disorder}]}."""
-    cache_file = REPO_ROOT / "data" / "orphanet" / "orphanet_cache.json"
+    cache_file = LACUENE_PATH / "data" / "orphanet" / "orphanet_cache.json"
     if not cache_file.exists():
         print(f"  WARNING: {cache_file} not found, skipping Orphanet", file=sys.stderr)
         return {}
@@ -84,7 +91,7 @@ def load_orphanet_associations() -> dict[str, list[dict]]:
 
 def load_omim_subset() -> dict[str, dict]:
     """Load bundled OMIM subset. Returns {symbol: {title, syndromes, inheritance}}."""
-    omim_file = REPO_ROOT / "data" / "omim" / "omim_subset.json"
+    omim_file = LACUENE_PATH / "data" / "omim" / "omim_subset.json"
     if not omim_file.exists():
         print(f"  WARNING: {omim_file} not found, skipping OMIM", file=sys.stderr)
         return {}
@@ -97,7 +104,7 @@ def load_omim_subset() -> dict[str, dict]:
 
 def load_curated_sources() -> dict[str, dict]:
     """Load source coverage from the curated CUE pipeline (if available)."""
-    sources_file = REPO_ROOT / "output" / "sources.json"
+    sources_file = LACUENE_PATH / "output" / "sources.json"
     if not sources_file.exists():
         return {}
 
@@ -213,6 +220,15 @@ def main():
             1 for r in rows
             if r["in_omim"] and not r["in_curated"]
         ),
+    }
+
+    # Add provenance metadata (finglonger pattern)
+    summary["_provenance"] = {
+        "worker": "workers/bulk_downloads.py",
+        "generated": datetime.now(timezone.utc).isoformat(),
+        "canon_purity": "derived",
+        "canon_sources": ["HGNC", "HPO", "Orphanet", "OMIM"],
+        "non_canon_elements": ["Cross-reference join logic", "Phenotype count thresholds"],
     }
 
     summary_path = OUTPUT_DIR / "genome_wide_summary.json"
