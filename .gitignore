@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.env
+expanded/hgnc_protein_coding.json
