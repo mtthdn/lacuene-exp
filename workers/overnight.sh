@@ -131,5 +131,18 @@ STATUSEOF
 
 phase_end 5
 
+# ── Phase 6: Post digest to GitHub ────────────────────────────────
+phase_start 6 "Digest posting"
+
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    "$SCRIPT_DIR/post_digest.sh" >> "$LOG" 2>&1 || {
+        log "WARNING: Digest posting failed"
+    }
+else
+    log "GITHUB_TOKEN not set, skipping digest post"
+fi
+
+phase_end 6
+
 log "Pipeline complete in ${SECONDS}s"
 log "Log: $LOG"
