@@ -296,6 +296,89 @@ def provenance():
     })
 
 
+@app.route("/api/digest")
+def digest():
+    """Weekly digest as markdown — summarizes gaps, candidates, enrichment."""
+    from datetime import date
+
+    lines = []
+    today = date.today().isoformat()
+    curated_count = len(_curated_sources)
+
+    lines.append(f"## lacuene Digest — {today}")
+    lines.append("")
+    lines.append(f"**{curated_count} curated genes** across **16 sources**")
+    lines.append("")
+
+    # Source coverage
+    source_labels = {
+        "in_go": "Gene Ontology", "in_omim": "OMIM", "in_hpo": "HPO",
+        "in_uniprot": "UniProt", "in_facebase": "FaceBase",
+        "in_clinvar": "ClinVar", "in_pubmed": "PubMed",
+        "in_gnomad": "gnomAD", "in_nih_reporter": "NIH Reporter",
+        "in_gtex": "GTEx", "in_clinicaltrials": "ClinicalTrials",
+        "in_string": "STRING", "in_orphanet": "Orphanet",
+        "in_opentargets": "Open Targets", "in_models": "MGI/ZFIN",
+        "in_structures": "AlphaFold/PDB",
+    }
+    lines.append("### Source Coverage")
+    lines.append("")
+    lines.append("| Source | Coverage |")
+    lines.append("|--------|----------|")
+    for key, label in source_labels.items():
+        count = sum(1 for s in _curated_sources.values() if s.get(key, False))
+        pct = count * 100 // curated_count if curated_count else 0
+        lines.append(f"| {label} | {count}/{curated_count} ({pct}%) |")
+    lines.append("")
+
+    # Gap candidates
+    gc_path = DERIVED_DIR / "gap_candidates.json"
+    enrich_path = DERIVED_DIR / "candidate_enrichment.json"
+    if gc_path.exists():
+        with open(gc_path) as f:
+            gc_data = json.load(f)
+        candidates = gc_data.get("candidates", [])
+        score_dist = gc_data.get("score_distribution", {})
+
+        cf_pubs = {}
+        if enrich_path.exists():
+            with open(enrich_path) as f:
+                enrich_data = json.load(f)
+            for ec in enrich_data.get("candidates", []):
+                cf_pubs[ec["symbol"]] = ec.get("pubmed_craniofacial_count", 0)
+
+        high = score_dist.get("high (12+)", 0)
+        med = score_dist.get("medium (7-11.9)", 0)
+
+        lines.append("### Gap Candidates")
+        lines.append("")
+        lines.append(f"**{len(candidates)} candidates** ({high} high, {med} medium)")
+        lines.append("")
+
+        top = sorted(candidates, key=lambda c: c.get("confidence_score", 0), reverse=True)[:10]
+        if top:
+            lines.append("| Gene | Score | HPO | Orphanet | CF Pubs | Name |")
+            lines.append("|------|------:|----:|---------:|--------:|------|")
+            for c in top:
+                ev = c.get("evidence", {})
+                hpo = ev.get("hpo_phenotype_count", 0)
+                orph = ev.get("orphanet_disorder_count", 0)
+                pubs = cf_pubs.get(c["symbol"], "\u2014")
+                name = c.get("name", "")[:40]
+                score = c.get("confidence_score", 0)
+                lines.append(f"| `{c['symbol']}` | {score} | {hpo} | {orph} | {pubs} | {name} |")
+            lines.append("")
+
+    lines.append("---")
+    lines.append(f"*Generated from lacuene-api on {today}*")
+
+    md = "\n".join(lines)
+    fmt = request.args.get("format", "json")
+    if fmt == "md" or fmt == "markdown":
+        return md, 200, {"Content-Type": "text/markdown; charset=utf-8"}
+    return jsonify({"digest": md, "date": today})
+
+
 @app.route("/")
 def index():
     """API documentation."""
@@ -314,6 +397,9 @@ def index():
                 "/api/enrichment/gap-candidates": "Genes with disease signal not in curated set (?min_score=N&limit=N)",
                 "/api/enrichment/coverage-matrix": "Full per-gene source coverage matrix",
                 "/api/enrichment/provenance": "Derivation audit trail",
+            },
+            "digest": {
+                "/api/digest": "Weekly digest as markdown or JSON (?format=md)",
             },
         },
     })
