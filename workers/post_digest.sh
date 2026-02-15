@@ -48,7 +48,10 @@ fi
 # Escape markdown for JSON payload
 BODY=$(python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" <<< "$DIGEST")
 
-HTTP_CODE=$(curl -s -o /tmp/gh_response.json -w "%{http_code}" \
+TMPFILE=$(mktemp /tmp/lacuene-digest-XXXXXX.json)
+trap 'rm -f "$TMPFILE"' EXIT
+
+HTTP_CODE=$(curl -s -o "$TMPFILE" -w "%{http_code}" \
     -X POST \
     -H "Authorization: token ${GITHUB_TOKEN}" \
     -H "Accept: application/vnd.github.v3+json" \
@@ -56,10 +59,10 @@ HTTP_CODE=$(curl -s -o /tmp/gh_response.json -w "%{http_code}" \
     "https://api.github.com/repos/${REPO}/issues/${ISSUE}/comments")
 
 if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-    COMMENT_URL=$(python3 -c "import json; print(json.load(open('/tmp/gh_response.json')).get('html_url',''))")
+    COMMENT_URL=$(python3 -c "import json; print(json.load(open('$TMPFILE')).get('html_url',''))")
     echo "Digest posted to ${REPO}#${ISSUE}: ${COMMENT_URL}"
 else
     echo "ERROR: GitHub API returned HTTP ${HTTP_CODE}" >&2
-    cat /tmp/gh_response.json >&2
+    cat "$TMPFILE" >&2
     exit 1
 fi

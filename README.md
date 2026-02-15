@@ -45,21 +45,29 @@ GET /api/coverage                 Source coverage summary
 ### Enrichment (derived data, from overnight pipeline)
 ```
 GET /api/enrichment/gap-candidates       Genes with disease signal not in curated set
-GET /api/enrichment/gap-candidates?min_score=4&limit=10
+GET /api/enrichment/gap-candidates?min_score=12&limit=10
 GET /api/enrichment/coverage-matrix      Full per-gene x per-source boolean matrix
 GET /api/enrichment/provenance           Derivation audit trail
 ```
 
+### Digest
+```
+GET /api/digest                          Weekly digest as JSON
+GET /api/digest?format=md                Weekly digest as raw markdown
+```
+
 ## Overnight Pipeline
 
-`workers/overnight.sh` runs weekly (cron: `0 2 * * 0`), 4 phases:
+`workers/overnight.sh` runs weekly (cron: `0 2 * * 0`), 6 phases:
 
 | Phase | Worker | What |
 |-------|--------|------|
 | 1 | `bulk_hgnc.py` | Refresh HGNC gene data (skips if <7d old) |
 | 2 | `bulk_downloads.py` | Cross-reference HPO, Orphanet, OMIM |
-| 3 | `derive_gap_candidates.py` | Identify research candidates |
-| 4 | Status snapshot | Record pipeline health |
+| 3 | `derive_gap_candidates.py` | Identify research candidates (log-scaled scoring) |
+| 4 | `enrich_candidates.py` | PubMed/UniProt enrichment for top 20 candidates |
+| 5 | Status snapshot | Record pipeline health to `derived/pipeline_status.json` |
+| 6 | `post_digest.sh` | Post markdown digest to GitHub issue (requires `GITHUB_TOKEN`) |
 
 Logs to `logs/overnight_YYYYMMDD.log`. Status in `derived/pipeline_status.json`.
 
@@ -71,6 +79,16 @@ CUE-based audit trail following the finglonger pattern:
 - `derivations.cue` — What was computed, from what, with canon purity
 - `insights.cue` — Discoveries worth recording (e.g., CUE scaling benchmarks)
 - `rejected.cue` — Failed approaches with rationale (prevents repeating work)
+
+## Testing
+
+```bash
+python3 -m pytest tests/ -v    # 25 tests: API routes + scoring formula
+```
+
+Tests cover all API routes (status codes, response shapes, filter params, graceful
+degradation) and the gap candidate confidence scoring formula (monotonicity,
+thresholds, known-value validation).
 
 ## Quick Start
 
@@ -87,6 +105,9 @@ LACUENE_PATH=../lacuene ./workers/overnight.sh
 
 # Start API
 LACUENE_PATH=../lacuene python3 api/serve.py --port 5000
+
+# Run tests
+python3 -m pytest tests/ -v
 ```
 
 ## Deployment
@@ -95,9 +116,9 @@ Production runs on tulip (Proxmox), fully containerized:
 
 | Component | Container | Address | Notes |
 |-----------|-----------|---------|-------|
-| API server | LXC 638 (lacuene) | 172.20.1.238:5100 | systemd `lacuene-api.service` |
-| Reverse proxy | LXC 612 (caddy) | lacuene-api.apercue.ca | HTTP reverse proxy |
-| Static site | LXC 612 (caddy) | lacuene.apercue.ca | From lacuene `just site` output |
+| API server | LXC 638 | lacuene-api.apercue.ca | gunicorn via systemd `lacuene-api.service` |
+| Reverse proxy | LXC 612 | lacuene-api.apercue.ca | Caddy HTTP reverse proxy |
+| Static site | LXC 612 | lacuene.apercue.ca | From lacuene `just site` output |
 | Overnight cron | LXC 638 | Sunday 2 AM + daily git pull | `/etc/cron.d/lacuene-overnight` |
 
 Nothing runs on the Proxmox host itself — all services are inside LXC containers.

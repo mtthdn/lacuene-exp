@@ -47,7 +47,7 @@ INSIGHT_004: #Insight & {
 INSIGHT_005: #Insight & {
 	id:         "INSIGHT_005"
 	statement:  "LXC containerization is mandatory for Proxmox-hosted services — host should only run hypervisor, not application code"
-	evidence:   ["LXC 638 deployment on tulip (172.20.1.238)", "Previous attempt ran Flask directly on Proxmox host"]
+	evidence:   ["LXC 638 deployment on tulip", "Previous attempt ran Flask directly on Proxmox host"]
 	method:     "cross_reference"
 	confidence: "high"
 	discovered: "2026-02-14"
