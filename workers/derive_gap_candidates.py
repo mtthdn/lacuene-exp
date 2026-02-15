@@ -77,6 +77,16 @@ def main():
     # Load Orphanet from bulk XML (covers all 4500+ genes, not just curated 80)
     orphanet = {}
     orphanet_xml = LACUENE_PATH / "data" / "orphanet" / "en_product6.xml"
+    orphanet_url = "http://www.orphadata.org/data/xml/en_product6.xml"
+    if not orphanet_xml.exists():
+        print(f"  Orphanet XML not cached, downloading from {orphanet_url}...")
+        try:
+            import urllib.request
+            orphanet_xml.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(orphanet_url, str(orphanet_xml))
+            print(f"  Downloaded {orphanet_xml.stat().st_size // 1024}KB")
+        except Exception as e:
+            print(f"  [Orphanet] Download failed: {e}", file=sys.stderr)
     if orphanet_xml.exists():
         tree = ET.parse(str(orphanet_xml))
         xml_root = tree.getroot()
@@ -104,7 +114,7 @@ def main():
                     )
         print(f"Orphanet: {len(orphanet)} genes from product6 XML")
     else:
-        print(f"  [Orphanet] XML not found: {orphanet_xml}", file=sys.stderr)
+        print(f"  [Orphanet] XML not available, skipping", file=sys.stderr)
 
     # Load OMIM subset
     omim_data = load_json(LACUENE_PATH / "data" / "omim" / "omim_subset.json", "omim")
